@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/release
 build/
 .dart_tool/
+
+*.wav
+build/
+.dart_tool/

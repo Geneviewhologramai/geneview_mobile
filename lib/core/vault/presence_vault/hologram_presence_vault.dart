@@ -1,17 +1,18 @@
-import 'package:flutter/foundation.dart';
-import '../../core/contracts/i_presence_vault.dart';
+import 'package:geneview_mobile/core/contracts/i_presence_vault.dart';
 
-class HologramPresenceVault extends ChangeNotifier implements IPresenceVault {
-  PresenceState _currentState = PresenceState.idle;
+class HologramPresenceVault implements IPresenceVault {
+  @override
+  Future<void> initialize() async {
+    // Hologram jelenlét inicializálása
+  }
 
   @override
-  PresenceState get currentState => _currentState;
+  Future<void> updatePresence(dynamic state) async {
+    // Jelenléti állapot frissítése
+  }
 
   @override
-  void updateState(PresenceState state) {
-    if (_currentState != state) {
-      _currentState = state;
-      notifyListeners();
-    }
+  Future<void> dispose() async {
+    // Erőforrások felszabadítása
   }
 }
