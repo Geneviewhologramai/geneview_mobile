@@ -47,3 +47,9 @@ build/
 *.wav
 build/
 .dart_tool/
+
+# Big Audio & TTS Cache
+*.wav
+*.mp3
+voices/cache/
+*.onnx.json
