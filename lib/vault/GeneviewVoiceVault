@@ -1,0 +1,52 @@
+import 'dart:async';
+import 'package:audioplayers/audioplayers.dart';
+
+enum VoiceSample {
+  manifesto,
+  ready,
+  analyzing,
+  offlineWarning,
+}
+
+class GeneviewVoiceVault {
+  final AudioPlayer _player = AudioPlayer();
+
+  // A beépített hangminták elérési útvonalai
+  final Map<VoiceSample, String> _samplePaths = {
+    VoiceSample.manifesto: 'audio/digitalis_szuverenitas.wav',
+    VoiceSample.ready: 'audio/system_ready.wav',
+  };
+
+  // Callback az Orchestrator felé a szájmozgás indításához és leállításához
+  void Function(bool isSpeaking)? onSpeakingStateChanged;
+
+  GeneviewVoiceVault() {
+    // Figyeljük, amikor a lejátszás véget ér
+    _player.onPlayerComplete.listen((_) {
+      onSpeakingStateChanged?.call(false);
+    });
+  }
+
+  /// Hangminta lejátszása közvetlenül az eszközről
+  Future<void> playSample(VoiceSample sample) async {
+    final path = _samplePaths[sample];
+    if (path == null) return;
+
+    try {
+      onSpeakingStateChanged?.call(true);
+      await _player.play(AssetSource(path));
+    } catch (e) {
+      onSpeakingStateChanged?.call(false);
+    }
+  }
+
+  /// Lejátszás azonnali megszakítása
+  Future<void> stop() async {
+    await _player.stop();
+    onSpeakingStateChanged?.call(false);
+  }
+
+  void dispose() {
+    _player.dispose();
+  }
+}

@@ -1,18 +1,14 @@
-import 'package:geneview_mobile/core/contracts/i_presence_vault.dart';
+﻿import '../../contracts/presence_contract.dart';
+import '../../contracts/i_presence_vault.dart';
 
-class HologramPresenceVault implements IPresenceVault {
-  @override
-  Future<void> initialize() async {
-    // Hologram jelenlét inicializálása
-  }
+class HologramPresenceVault implements IPresenceVaultContract {
+  PresenceState _state = PresenceState.idle;
 
   @override
-  Future<void> updatePresence(dynamic state) async {
-    // Jelenléti állapot frissítése
-  }
+  PresenceState get state => _state;
 
   @override
-  Future<void> dispose() async {
-    // Erőforrások felszabadítása
+  void setPresence(PresenceState state) {
+    _state = state;
   }
 }

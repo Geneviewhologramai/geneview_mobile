@@ -149,7 +149,7 @@ class _HologramStageState extends State<HologramStage> {
                     decoration: BoxDecoration(
                       color: Colors.black,
                       border: Border.all(
-                        color: ArtDecoTheme.goldAccent.withOpacity(0.2),
+                        color: ArtDecoTheme.goldAccent.withValues(alpha: 0.2),
                         width: 1,
                       ),
                     ),
@@ -161,7 +161,7 @@ class _HologramStageState extends State<HologramStage> {
                           shape: BoxShape.circle,
                           color: _isCommunicating
                               ? ArtDecoTheme.goldAccent
-                              : ArtDecoTheme.goldAccent.withOpacity(0.3),
+                              : ArtDecoTheme.goldAccent.withValues(alpha: 0.3),
                         ),
                       ),
                     ),

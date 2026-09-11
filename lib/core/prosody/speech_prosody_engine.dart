@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 /// Beszédszintézishez és vizuális mimikához használt akusztikai/prozódiai profil

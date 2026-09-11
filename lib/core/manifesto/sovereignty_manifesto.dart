@@ -3,6 +3,7 @@
 /// Kiáltvány és Determinisztikus Logikai Ellenőrző Engine (Dart / Flutter port)
 /// Szerző: Janos Hasulyo (JSTARMAN) - Alapító, PHIU-1 & Project Geneviève
 /// ============================================================================
+library;
 
 class ManifestoPrinciples {
   final String title;

@@ -1,33 +1,48 @@
-Future<String> thinkAndRespond(String userInput) async {
-  final cleanInput = userInput.trim();
-  if (cleanInput.isEmpty) return "Hallgatlak, figyelek rád.";
+// ==============================================================================
+// PONTOS HELY: lib/core/intelligence/geneview_brain.dart
+// ==============================================================================
 
-  // 1. Biztonsági és formai ellenőrzés
-  final safety = ConversationalProtocol.evaluateSafety(cleanInput);
-  if (safety == InteractionType.hostileOrOffensive || 
-      safety == InteractionType.sexualOrInappropriate) {
-    return ConversationalProtocol.processInteraction(
-      userInput: cleanInput, 
-      rawAnswer: null
-    );
+import '../contracts/presence_contract.dart';
+
+class GeneviewBrain {
+  ConversationalProtocol activeProtocol = ConversationalProtocol.empathic;
+  InteractionType lastInteraction = InteractionType.general;
+
+  String processInput(String input) {
+    if (input.isEmpty) {
+      return _generateSophisticatedStateResponse(PresenceState.idle);
+    }
+
+    final lower = input.toLowerCase();
+    if (lower.contains('szuverenitás') || lower.contains('ki vagy')) {
+      activeProtocol = ConversationalProtocol.manifesto;
+      lastInteraction = InteractionType.philosophical;
+      return _queryKnowledgeBase('szuverenitas');
+    }
+
+    return "Értelmeztem a bemenetet: $input. A lokális rendszer kész.";
   }
 
-  // 2. Személyes / udvariassági kérdések
-  if (safety == InteractionType.greetingOrPersonal) {
-    return _generateSophisticatedStateResponse(cleanInput.toLowerCase());
+  String _generateSophisticatedStateResponse(PresenceState state) {
+    switch (state) {
+      case PresenceState.speaking:
+        return "Geneview aktívan kommunikál.";
+      case PresenceState.thinking:
+        return "Gondolkodom a válaszon...";
+      case PresenceState.listening:
+        return "Figyelek rád.";
+      case PresenceState.error:
+        return "Helyi kommunikációs hiba lépett fel.";
+      case PresenceState.idle:
+      default:
+        return "Geneview készenlétben áll.";
+    }
   }
 
-  // 3. Ténybeli kérdés megválaszolása
-  String? rawAnswer;
-  try {
-    rawAnswer = await _queryKnowledgeBase(cleanInput);
-  } catch (_) {
-    rawAnswer = null;
+  String _queryKnowledgeBase(String key) {
+    if (key == 'szuverenitas') {
+      return "Geneview a digitális szuverenitás eszköze, 100% helyi memóriával.";
+    }
+    return "A kért tudásbázis-elem elérhető.";
   }
-
-  // 4. Protokoll kényszerítése (ha üres vagy blabla lenne, a protokoll őszintén leállítja)
-  return ConversationalProtocol.processInteraction(
-    userInput: cleanInput,
-    rawAnswer: rawAnswer,
-  );
 }

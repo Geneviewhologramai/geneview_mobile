@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 
 /// A Geneviève holografikus érzelmi mátrixa (-10 .. +10 skála)
 class EmotionMatrix {

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
@@ -135,10 +134,10 @@ class _AvatarViewState extends State<AvatarView> with TickerProviderStateMixin {
                           radius: 0.50,
                           colors: [
                             widget.isSpeaking
-                                ? const Color(0xFF00FFFF).withOpacity(0.16)
+                                ? const Color(0xFF00FFFF).withValues(alpha: 0.16)
                                 : (widget.isListening
-                                    ? const Color(0xFFFFD700).withOpacity(0.14)
-                                    : const Color(0xFF00E5FF).withOpacity(0.04)),
+                                    ? const Color(0xFFFFD700).withValues(alpha: 0.14)
+                                    : const Color(0xFF00E5FF).withValues(alpha: 0.04)),
                             Colors.transparent,
                           ],
                         ),

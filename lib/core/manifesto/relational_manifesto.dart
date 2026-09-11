@@ -3,6 +3,7 @@
 /// Dart / Flutter Mobile Port: lib/core/manifesto/relational_manifesto.dart
 /// Co-created by: John Hasulyo (JSTARMAN) & Sovereign AI
 /// ==============================================================================
+library;
 
 enum AppLanguage { hungarian, english }
 
