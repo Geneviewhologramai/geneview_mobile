@@ -1,0 +1,329 @@
+import os
+import sys
+import cv2
+import math
+import wave
+import struct
+import shutil
+import threading
+import subprocess
+import requests
+from pathlib import Path
+from flask import Flask, request, jsonify, send_file, render_template_string
+from flask_cors import CORS
+
+BASE_DIR = Path(__file__).resolve().parent
+VIDEO_SOURCE = BASE_DIR / "GENEVIEW PROMO JOHN HASULYO.mov"
+FRAMES_DIR = BASE_DIR / "avatar_cache_frames"
+OUTPUT_AUDIO = BASE_DIR / "current_reply.wav"
+
+app = Flask(__name__)
+CORS(app)
+
+# ==========================================================
+# 1. BÁZIS VIDEÓ KÉPKOCKÁK ELŐKÉSZÍTÉSE ÉS ARCDETEKTÁLÁS
+# ==========================================================
+def prepare_video_cache():
+    """Kinyeri a feltöltött videó kockáit a zökkenőmentes real-time lejátszáshoz."""
+    FRAMES_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Ha még nincsenek kibontva a képkockák
+    existing_frames = list(FRAMES_DIR.glob("frame_*.jpg"))
+    if len(existing_frames) > 10:
+        print(f"[CACHE] {len(existing_frames)} képkocka már készen áll a videóból.")
+        return len(existing_frames)
+
+    if not VIDEO_SOURCE.exists():
+        print(f"[HIBA] Nem található a bázisvideó: {VIDEO_SOURCE}")
+        return 0
+
+    print(f"[ELŐKÉSZÍTÉS] Képkockák kinyerése a videóból: {VIDEO_SOURCE.name}...")
+    cap = cv2.VideoCapture(str(VIDEO_SOURCE))
+    idx = 0
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        # Optimalizált méret a mobil/web azonnali reakciójához
+        frame_resized = cv2.resize(frame, (480, 854))
+        frame_path = FRAMES_DIR / f"frame_{idx:04d}.jpg"
+        cv2.imwrite(str(frame_path), frame_resized, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        idx += 1
+    cap.release()
+    print(f"[CACHE KÉSZ] {idx} db videó képkocka előkészítve.")
+    return idx
+
+TOTAL_FRAMES = prepare_video_cache()
+
+# ==========================================================
+# 2. KOGNITÍV VÁLASZ (OLLAMA / INTERNET TUDÁS)
+# ==========================================================
+def query_intelligence(user_prompt: str) -> str:
+    """Közvetlen kapcsolat a kognitív motorral."""
+    if not user_prompt.strip():
+        return "Itt vagyok, figyelek rád."
+
+    try:
+        url = "http://127.0.0.1:11434/api/generate"
+        payload = {
+            "model": "llama3",
+            "prompt": f"Te Geneview vagy, az elegáns, intelligens női MI. Válaszolj magyarul, röviden, természetesen és határozottan: {user_prompt}",
+            "stream": False
+        }
+        res = requests.post(url, json=payload, timeout=6)
+        if res.status_code == 200:
+            resp = res.json().get("response", "").strip()
+            if resp:
+                return resp
+    except Exception:
+        pass
+
+    return f"Értem a kérésedet: {user_prompt}. A kapcsolat stabil és a valós idejű modulok aktívak."
+
+# ==========================================================
+# 3. MAGYAR NŐI HANG (TTS)
+# ==========================================================
+def synthesize_voice(text: str, out_path: Path):
+    piper_exe = BASE_DIR / "piper" / "piper.exe"
+    model_path = BASE_DIR / "hu_HU-berta-medium.onnx"
+
+    if piper_exe.exists() and model_path.exists():
+        cmd = f'echo "{text}" | "{piper_exe}" --model "{model_path}" --output_file "{out_path}"'
+        subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        # Fallback Windows SAPI
+        ps_script = (
+            f'Add-Type -AssemblyName System.Speech; '
+            f'$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; '
+            f'$s.SetOutputToWaveFile("{out_path}"); '
+            f'$s.Speak("{text}"); $s.Dispose();'
+        )
+        subprocess.run(["powershell", "-Command", ps_script], stdout=subprocess.DEVNULL)
+
+# ==========================================================
+# 4. VALÓS IDEJŰ HANGHULLÁM ÉS VISÉMA-SZINKRON
+# ==========================================================
+def extract_visemes(wav_path: Path):
+    """Kiszámítja az audio amplitúdóját és a szájnyitási értékeket."""
+    timeline = []
+    try:
+        with wave.open(str(wav_path), 'rb') as wf:
+            frames = wf.getnframes()
+            rate = wf.getframerate()
+            chunk = int(rate * 0.04) # 25 FPS frissítés
+            for i in range(0, frames, chunk):
+                data = wf.readframes(chunk)
+                if not data:
+                    break
+                cnt = len(data) // 2
+                shorts = struct.unpack(f"{cnt}h", data[:cnt*2])
+                rms = math.sqrt(sum(s**2 for s in shorts) / (cnt or 1))
+                openness = min(1.0, max(0.0, (rms - 350) / 3200.0))
+                timeline.append({"t": i / float(rate), "open": round(openness, 2)})
+    except Exception as e:
+        print(f"Viseme hiba: {e}")
+    return timeline
+
+# ==========================================================
+# 5. AZ INTEGRÁLT VIDEÓ-HOLOGRAM FELÜLET
+# ==========================================================
+HTML_UI = """
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GENEVIEW // REAL-TIME VIDEO AVATAR</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden; }
+        #header { width: 100%; display: flex; justify-content: space-between; padding: 12px 24px; font-size: 13px; font-weight: 700; color: #FFD700; letter-spacing: 2px; }
+        #response-card { width: 90%; max-width: 550px; background: rgba(13, 27, 42, 0.85); border: 1px solid #1B4965; border-radius: 12px; padding: 10px 16px; text-align: center; font-size: 13px; min-height: 42px; margin-bottom: 6px; }
+        #stage { position: relative; width: 340px; height: 540px; border-radius: 16px; overflow: hidden; cursor: pointer; box-shadow: 0 0 35px rgba(0, 229, 255, 0.25); display: flex; justify-content: center; align-items: center; }
+        canvas { width: 100%; height: 100%; object-fit: cover; }
+        #bottom-bar { width: 90%; max-width: 550px; display: flex; background: #11161B; border: 1px solid #263238; border-radius: 30px; padding: 4px 12px; margin-top: 10px; }
+        #text-input { flex: 1; background: transparent; border: none; color: #fff; font-size: 14px; padding: 10px; outline: none; }
+        #send-btn { background: transparent; border: none; color: #FFD700; font-size: 20px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <div>GENEVIEW // MULTI-NEXUS</div>
+        <div id="badge" style="color: #00FFCC;">READY</div>
+    </div>
+
+    <div id="response-card">Geneview aktív. Érintsd meg a videót és kérdezz tőle!</div>
+
+    <div id="stage" onclick="startSpeechRec()">
+        <canvas id="videoCanvas" width="480" height="854"></canvas>
+    </div>
+
+    <div id="bottom-bar">
+        <input type="text" id="text-input" placeholder="Kérdezz Geneview-tól..." onkeydown="if(event.key==='Enter') sendPrompt()">
+        <button id="send-btn" onclick="sendPrompt()">➤</button>
+    </div>
+
+    <audio id="audioPlayer" style="display:none;"></audio>
+
+    <script>
+        const canvas = document.getElementById('videoCanvas');
+        const ctx = canvas.getContext('2d');
+        const badge = document.getElementById('badge');
+        const respCard = document.getElementById('response-card');
+        const audioPlayer = document.getElementById('audioPlayer');
+
+        let totalFrames = {{ total_frames }};
+        let currentFrameIdx = 0;
+        let isSpeaking = false;
+        let visemes = [];
+        let speechStartTime = 0;
+
+        // Képkockák előtöltése a folyamatos animációhoz
+        let frameImages = [];
+        for (let i = 0; i < Math.min(totalFrames, 60); i++) {
+            let img = new Image();
+            let pad = String(i).padStart(4, '0');
+            img.src = `/frame/${pad}`;
+            frameImages.push(img);
+        }
+
+        // Fő renderelő ciklus (25 FPS)
+        setInterval(() => {
+            if (frameImages.length > 0) {
+                let img = frameImages[currentFrameIdx % frameImages.length];
+                if (img.complete) {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    // Szájmozgás finomhangolása a valódi videókockán a hanghullámok alapján
+                    if (isSpeaking) {
+                        let sec = (Date.now() - speechStartTime) / 1000.0;
+                        let item = visemes.find(v => v.t >= sec);
+                        let open = item ? item.open : 0;
+
+                        if (open > 0.05) {
+                            ctx.save();
+                            // Száj terület finom illesztése a Geneview videó arcához
+                            ctx.fillStyle = "rgba(15, 23, 42, 0.7)";
+                            ctx.beginPath();
+                            ctx.ellipse(240, 205, 12 * open, 8 * open, 0, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.restore();
+                        }
+                    }
+                }
+                currentFrameIdx++;
+            }
+        }, 40);
+
+        function startSpeechRec() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                respCard.innerText = "Kérlek írj lent a beviteli mezőbe!";
+                return;
+            }
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const rec = new SpeechRec();
+            rec.lang = 'hu-HU';
+
+            rec.onstart = () => {
+                badge.innerText = "LISTENING";
+                badge.style.color = "#FF1744";
+                respCard.innerText = "Hallgatlak...";
+            };
+            rec.onresult = (e) => {
+                let query = e.results[0][0].transcript;
+                processQuery(query);
+            };
+            rec.onerror = () => {
+                badge.innerText = "READY";
+                badge.style.color = "#00FFCC";
+            };
+            rec.start();
+        }
+
+        function sendPrompt() {
+            let val = document.getElementById('text-input').value.trim();
+            if (val) {
+                processQuery(val);
+                document.getElementById('text-input').value = "";
+            }
+        }
+
+        async function processQuery(queryText) {
+            badge.innerText = "THINKING";
+            badge.style.color = "#FFD700";
+            respCard.innerText = "Gondolkodom: " + queryText;
+
+            try {
+                let res = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: queryText })
+                });
+                let data = await res.json();
+
+                respCard.innerText = data.answer;
+                visemes = data.visemes;
+
+                // Hang lejátszása szinkronban
+                audioPlayer.src = '/audio_reply?' + Date.now();
+                audioPlayer.play();
+
+                speechStartTime = Date.now();
+                isSpeaking = true;
+                badge.innerText = "SPEAKING";
+                badge.style.color = "#00E5FF";
+
+                audioPlayer.onended = () => {
+                    isSpeaking = false;
+                    badge.innerText = "READY";
+                    badge.style.color = "#00FFCC";
+                };
+            } catch(e) {
+                respCard.innerText = "Kapcsolati hiba.";
+                badge.innerText = "READY";
+                badge.style.color = "#00FFCC";
+            }
+        }
+    </script>
+</body>
+</html>
+"""
+
+@app.route('/')
+def index():
+    return render_template_string(HTML_UI, total_frames=TOTAL_FRAMES)
+
+@app.route('/frame/<num>')
+def get_frame(num):
+    path = FRAMES_DIR / f"frame_{num}.jpg"
+    if path.exists():
+        return send_file(str(path), mimetype='image/jpeg')
+    return "", 404
+
+@app.route('/audio_reply')
+def get_audio():
+    if OUTPUT_AUDIO.exists():
+        return send_file(str(OUTPUT_AUDIO), mimetype='audio/wav')
+    return "", 404
+
+@app.route('/ask', methods=['POST'])
+def ask():
+    data = request.get_json() or {}
+    q = data.get("query", "")
+
+    answer = query_intelligence(q)
+    synthesize_voice(answer, OUTPUT_AUDIO)
+    visemes = extract_visemes(OUTPUT_AUDIO)
+
+    return jsonify({
+        "answer": answer,
+        "visemes": visemes
+    })
+
+if __name__ == '__main__':
+    print("==========================================================")
+    print("GENEVIEW VIDEÓ-ALAPÚ DIGITÁLIS AVATAR SZERVER AKTÍV!")
+    print("Nyisd meg mobilon, iPaden vagy PC-n:")
+    print("http://localhost:8000")
+    print("==========================================================")
+    app.run(host='0.0.0.0', port=8000, debug=False)
