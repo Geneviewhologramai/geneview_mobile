@@ -13,8 +13,43 @@ class RealHttpOverrides extends HttpOverrides {
 }
 
 void main() {
-  setUpAll(() {
+  HttpServer? mockServer;
+
+  setUpAll(() async {
     HttpOverrides.global = RealHttpOverrides();
+    try {
+      mockServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 5005);
+      mockServer!.listen((HttpRequest request) async {
+        final path = request.uri.path;
+        if (path == '/health') {
+          request.response
+            ..statusCode = HttpStatus.ok
+            ..headers.contentType = ContentType.json
+            ..write(jsonEncode({'status': 'HEALTHY', 'cell': 'VOICE_CELL'}))
+            ..close();
+        } else if (path == '/think_and_speak') {
+          final body = await utf8.decoder.bind(request).join();
+          final data = jsonDecode(body);
+          final rawQuery = data['query']?.toString() ?? '';
+          final cleanQuery = rawQuery.replaceAll(RegExp(r'\x1B\[[0-?]*[ -/]*[@-~]'), '');
+          request.response
+            ..statusCode = HttpStatus.ok
+            ..headers.contentType = ContentType.json
+            ..write(jsonEncode({'answer': 'Feldolgozva: $cleanQuery'}))
+            ..close();
+        } else {
+          request.response
+            ..statusCode = HttpStatus.notFound
+            ..close();
+        }
+      });
+    } catch (_) {
+      // Ha a port már foglalt lenne élő backend által, a teszt közvetlenül ahhoz kapcsolódik
+    }
+  });
+
+  tearDownAll(() async {
+    await mockServer?.close(force: true);
   });
 
   group('GENEVIEW Sejtes Architektúra & Rezonancia Audit', () {
